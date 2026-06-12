@@ -6,6 +6,7 @@ import type { AgentTool } from "@earendil-works/pi-agent-core";
 
 type State = {
 	requests: number;
+	codeExecutions?: number;
 	recoveries?: number;
 	lastRecoveredAnswer?: string;
 };
@@ -149,7 +150,7 @@ async function jsonBody(request: Request) {
 	return request.json().catch(() => ({})) as Promise<Record<string, unknown>>;
 }
 
-function codeTool(env: Env): AgentTool {
+function codeTool(env: Env, onExecute: () => void): AgentTool {
 	return {
 		name: "execute_js",
 		label: "Execute JavaScript",
@@ -158,6 +159,7 @@ function codeTool(env: Env): AgentTool {
 			code: Type.String({ description: "An async arrow function, for example: async () => 2 + 2" }),
 		}),
 		execute: async (_toolCallId, params) => {
+			onExecute();
 			const { code } = params as { code: string };
 			const executor = new DynamicWorkerExecutor({ loader: env.LOADER, globalOutbound: null, timeout: 10_000 });
 			const result = await executor.execute(code, {});
@@ -185,6 +187,7 @@ export class PiAgent extends Agent<Env, State> {
 			gateway: this.env.AI_GATEWAY_ID,
 			durableExecution: "runFiber",
 			requests: this.state.requests,
+			codeExecutions: this.state.codeExecutions ?? 0,
 			recoveries: this.state.recoveries ?? 0,
 			lastRecoveredAnswer: this.state.lastRecoveredAnswer,
 		};
@@ -192,8 +195,9 @@ export class PiAgent extends Agent<Env, State> {
 
 	private async completeTurn(prompt: string) {
 		const model = modelFromGatewayName(this.env.PI_MODEL);
+		let codeExecutions = 0;
 		const pi = new Pi({
-			initialState: { systemPrompt: SYSTEM_PROMPT, model, thinkingLevel: "off", tools: [codeTool(this.env)] },
+			initialState: { systemPrompt: SYSTEM_PROMPT, model, thinkingLevel: "off", tools: [codeTool(this.env, () => codeExecutions++)] },
 			streamFn: (_model, context) => streamFromGateway(this.env, model, context),
 		});
 
@@ -204,7 +208,7 @@ export class PiAgent extends Agent<Env, State> {
 
 		try {
 			await pi.prompt(prompt);
-			return { answer, model: model.name };
+			return { answer, model: model.name, codeExecutions };
 		} finally {
 			unsubscribe();
 		}
@@ -217,7 +221,10 @@ export class PiAgent extends Agent<Env, State> {
 		return await this.runFiber("pi-prompt", async (fiber) => {
 			fiber.stash({ prompt });
 			const result = await this.completeTurn(prompt);
-			this.setState({ requests: this.state.requests + 1 });
+			this.setState({
+				requests: this.state.requests + 1,
+				codeExecutions: (this.state.codeExecutions ?? 0) + result.codeExecutions,
+			});
 			return result;
 		});
 	}
@@ -228,9 +235,10 @@ export class PiAgent extends Agent<Env, State> {
 		const snapshot = ctx.snapshot as { prompt?: unknown } | null;
 		if (typeof snapshot?.prompt !== "string") return;
 
-		const { answer } = await this.completeTurn(snapshot.prompt);
+		const { answer, codeExecutions } = await this.completeTurn(snapshot.prompt);
 		this.setState({
 			requests: this.state.requests + 1,
+			codeExecutions: (this.state.codeExecutions ?? 0) + codeExecutions,
 			recoveries: (this.state.recoveries ?? 0) + 1,
 			lastRecoveredAnswer: answer,
 		});

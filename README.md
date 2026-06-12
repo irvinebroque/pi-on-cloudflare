@@ -6,7 +6,7 @@ A minimal example of running [Pi](https://pi.dev/docs/latest/sdk) on Cloudflare 
 
 This repo is intentionally small. It shows the basic shape, not a full coding environment.
 
-Live demo: [pi-on-cloudflare.roundtrip.workers.dev](https://pi-on-cloudflare.roundtrip.workers.dev)
+Live demo: [pi-on-cloudflare-code.roundtrip.workers.dev](https://pi-on-cloudflare-code.roundtrip.workers.dev)
 
 ## What This Shows
 

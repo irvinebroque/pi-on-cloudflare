@@ -4,7 +4,7 @@
  */
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "pi-on-cloudflare",
+	"name": "pi-on-cloudflare-code",
 	"main": "src/index.ts",
 	"compatibility_date": "2026-06-12",
 	"observability": {

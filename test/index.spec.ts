@@ -20,6 +20,7 @@ describe("Pi Agent worker", () => {
 			gateway: "default",
 			durableExecution: "runFiber",
 			requests: 0,
+			codeExecutions: 0,
 		});
 	});
 

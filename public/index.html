@@ -205,6 +205,7 @@ button:disabled { cursor: wait; opacity: 0.7; }
       </div>
       <div class="pills">
         <span class="pill">Requests <b id="requests">-</b></span>
+        <span class="pill">Code runs <b id="codeExecutions">-</b></span>
         <span class="pill">Recoveries <b id="recoveries">-</b></span>
         <span id="model" class="pill">Loading model...</span>
       </div>
@@ -227,6 +228,7 @@ const form = document.getElementById("chat");
 const messages = document.getElementById("messages");
 const model = document.getElementById("model");
 const requests = document.getElementById("requests");
+const codeExecutions = document.getElementById("codeExecutions");
 const recoveries = document.getElementById("recoveries");
 const prompt = document.getElementById("prompt");
 const run = document.getElementById("run");
@@ -243,6 +245,7 @@ function bubble(text, who) {
 function renderStatus(data) {
   model.textContent = data.model || "-";
   requests.textContent = data.state?.requests ?? data.requests ?? "-";
+  codeExecutions.textContent = data.state?.codeExecutions ?? data.codeExecutions ?? "-";
   recoveries.textContent = data.recoveries ?? "-";
 }
 
