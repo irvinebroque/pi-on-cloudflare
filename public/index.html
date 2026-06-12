@@ -49,6 +49,17 @@ h1 {
   color: var(--text-color-kumo-subtle);
   font-size: 18px;
 }
+.repo-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+  color: var(--text-color-kumo-link);
+  font-size: 14px;
+  font-weight: 650;
+  text-decoration: none;
+}
+.repo-link:hover { text-decoration: underline; }
 .shell {
   overflow: hidden;
   border: 1px solid var(--color-kumo-hairline);
@@ -183,6 +194,7 @@ button:disabled { cursor: wait; opacity: 0.7; }
     <div class="eyebrow">Cloudflare Agents SDK + Pi</div>
     <h1>Pi Agent on Cloudflare</h1>
     <p>A Kumo-styled chat demo backed by one Durable Object. Each prompt runs through an Agents SDK fiber, Pi, and AI Gateway.</p>
+    <a class="repo-link" href="https://github.com/irvinebroque/pi-on-cloudflare" target="_blank" rel="noreferrer">View source on GitHub</a>
   </header>
 
   <section class="shell">
