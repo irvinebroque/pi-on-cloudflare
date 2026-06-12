@@ -79,7 +79,7 @@ Each turn runs inside an Agents SDK fiber:
 ```ts
 return await this.runFiber("pi-prompt", async (fiber) => {
   fiber.stash({ prompt });
-  const result = await this.askPi(prompt);
+  const result = await this.completeTurn(prompt);
   this.setState({ requests: this.state.requests + 1 });
   return result;
 });

@@ -106,7 +106,7 @@ export class PiAgent extends Agent<Env, State> {
 		};
 	}
 
-	private async askPi(prompt: string) {
+	private async completeTurn(prompt: string) {
 		const model = modelFromGatewayName(this.env.PI_MODEL);
 		const pi = new Pi({
 			initialState: { systemPrompt: SYSTEM_PROMPT, model, thinkingLevel: "off", tools: [] },
@@ -126,13 +126,13 @@ export class PiAgent extends Agent<Env, State> {
 		}
 	}
 
-	async runPrompt(input: string) {
+	async runTurn(input: string) {
 		const prompt = input.trim();
 		if (!prompt) throw new Error("Missing prompt");
 
 		return await this.runFiber("pi-prompt", async (fiber) => {
 			fiber.stash({ prompt });
-			const result = await this.askPi(prompt);
+			const result = await this.completeTurn(prompt);
 			this.setState({ requests: this.state.requests + 1 });
 			return result;
 		});
@@ -144,7 +144,7 @@ export class PiAgent extends Agent<Env, State> {
 		const snapshot = ctx.snapshot as { prompt?: unknown } | null;
 		if (typeof snapshot?.prompt !== "string") return;
 
-		const { answer } = await this.askPi(snapshot.prompt);
+		const { answer } = await this.completeTurn(snapshot.prompt);
 		this.setState({
 			requests: this.state.requests + 1,
 			recoveries: (this.state.recoveries ?? 0) + 1,
@@ -165,7 +165,7 @@ export default {
 			if (!prompt) return Response.json({ error: "Missing prompt" }, { status: 400 });
 
 			try {
-				return Response.json(await agent.runPrompt(prompt));
+				return Response.json(await agent.runTurn(prompt));
 			} catch (error) {
 				return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
 			}

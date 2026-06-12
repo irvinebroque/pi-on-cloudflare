@@ -67,13 +67,13 @@ type State = {
 export class PiAgent extends Agent<Env, State> {
   initialState: State = { requests: 0 };
 
-  async runPrompt(input: string) {
+  async runTurn(input: string) {
     const prompt = input.trim();
     if (!prompt) throw new Error("Missing prompt");
 
     return await this.runFiber("pi-prompt", async (fiber) => {
       fiber.stash({ prompt });
-      const result = await this.askPi(prompt);
+      const result = await this.completeTurn(prompt);
       this.setState({ requests: this.state.requests + 1 });
       return result;
     });
@@ -85,7 +85,7 @@ export class PiAgent extends Agent<Env, State> {
     const snapshot = ctx.snapshot as { prompt?: unknown } | null;
     if (typeof snapshot?.prompt !== "string") return;
 
-    const { answer } = await this.askPi(snapshot.prompt);
+    const { answer } = await this.completeTurn(snapshot.prompt);
     this.setState({
       requests: this.state.requests + 1,
       recoveries: (this.state.recoveries ?? 0) + 1,
@@ -93,7 +93,7 @@ export class PiAgent extends Agent<Env, State> {
     });
   }
 
-  private async askPi(prompt: string) {
+  private async completeTurn(prompt: string) {
     // Create a Pi core agent and bridge its stream to AI Gateway.
   }
 }
@@ -129,7 +129,7 @@ export default {
 
     if (request.method === "POST" && url.pathname === "/api/prompt") {
       const { prompt } = (await request.json()) as { prompt?: string };
-      return Response.json(await agent.runPrompt(prompt ?? ""));
+      return Response.json(await agent.runTurn(prompt ?? ""));
     }
 
     return new Response("Not found", { status: 404 });
@@ -144,13 +144,13 @@ For a browser UI, serve static HTML with Workers Static Assets and route `/api/*
 Wrap the Pi turn in `runFiber()` and checkpoint the prompt with `stash()` before calling Pi:
 
 ```ts
-async runPrompt(input: string) {
+async runTurn(input: string) {
   const prompt = input.trim();
   if (!prompt) throw new Error("Missing prompt");
 
   return await this.runFiber("pi-prompt", async (fiber) => {
     fiber.stash({ prompt });
-    const result = await this.askPi(prompt);
+    const result = await this.completeTurn(prompt);
     this.setState({ requests: this.state.requests + 1 });
     return result;
   });
@@ -166,7 +166,7 @@ async onFiberRecovered(ctx: FiberRecoveryContext) {
   const snapshot = ctx.snapshot as { prompt?: unknown } | null;
   if (typeof snapshot?.prompt !== "string") return;
 
-  const { answer } = await this.askPi(snapshot.prompt);
+  const { answer } = await this.completeTurn(snapshot.prompt);
   this.setState({
     requests: this.state.requests + 1,
     recoveries: (this.state.recoveries ?? 0) + 1,
