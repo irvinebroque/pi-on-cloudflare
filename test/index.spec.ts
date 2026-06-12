@@ -1,29 +1,33 @@
-import {
-	env,
-	createExecutionContext,
-	waitOnExecutionContext,
-	SELF,
-} from "cloudflare:test";
-import { describe, it, expect } from "vitest";
-import worker from "../src/index";
+import { SELF } from "cloudflare:test";
+import { describe, expect, it } from "vitest";
 
-// For now, you'll need to do something like this to get a correctly-typed
-// `Request` to pass to `worker.fetch()`.
-const IncomingRequest = Request<unknown, IncomingRequestCfProperties>;
+describe("Pi Agent worker", () => {
+	it("serves the minimal HTML interface as a static asset", async () => {
+		const response = await SELF.fetch("https://example.com/");
 
-describe("Hello World worker", () => {
-	it("responds with Hello World! (unit style)", async () => {
-		const request = new IncomingRequest("http://example.com");
-		// Create an empty context to pass to `worker.fetch()`.
-		const ctx = createExecutionContext();
-		const response = await worker.fetch(request, env, ctx);
-		// Wait for all `Promise`s passed to `ctx.waitUntil()` to settle before running test assertions
-		await waitOnExecutionContext(ctx);
-		expect(await response.text()).toMatchInlineSnapshot(`"Hello World!"`);
+		expect(response.headers.get("content-type")).toContain("text/html");
+		expect(await response.text()).toContain("Pi Agent on Cloudflare");
 	});
 
-	it("responds with Hello World! (integration style)", async () => {
-		const response = await SELF.fetch("https://example.com");
-		expect(await response.text()).toMatchInlineSnapshot(`"Hello World!"`);
+	it("reports status through the public API", async () => {
+		const response = await SELF.fetch("https://example.com/api/status");
+		const body = await response.json();
+
+		expect(response.status).toBe(200);
+		expect(body).toMatchObject({
+			ok: true,
+			model: "openai/gpt-4.1-mini",
+			gateway: "default",
+			durableExecution: "runFiber",
+			requests: 0,
+		});
+	});
+
+	it("validates prompts before calling AI Gateway", async () => {
+		const response = await SELF.fetch("https://example.com/api/prompt", { method: "POST", body: "{}" });
+		const body = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(body).toMatchObject({ error: "Missing prompt" });
 	});
 });

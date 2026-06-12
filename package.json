@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
+    "build:assets": "node -e \"require('node:fs').copyFileSync('node_modules/@cloudflare/kumo/dist/styles/kumo-standalone.css','public/kumo.css')\"",
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
     "start": "wrangler dev",
@@ -15,5 +16,11 @@
     "typescript": "^5.5.2",
     "vitest": "~3.2.0",
     "wrangler": "^4.100.0"
+  },
+  "dependencies": {
+    "@cloudflare/kumo": "^2.5.2",
+    "@earendil-works/pi-agent-core": "^0.79.1",
+    "@earendil-works/pi-ai": "^0.79.1",
+    "agents": "^0.15.0"
   }
 }
