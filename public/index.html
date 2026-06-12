@@ -6,41 +6,206 @@
 <title>Pi Agent on Cloudflare</title>
 <link rel="stylesheet" href="/kumo.css">
 <style>
-.kumo-card { box-shadow: 0 1px 0 var(--color-kumo-shadow-edge), 0 12px 32px var(--color-kumo-shadow-drop); }
-.bubble { max-width: min(42rem, 88%); }
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--color-kumo-canvas);
+  color: var(--text-color-kumo-default);
+  font: 16px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+main {
+  width: min(920px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 56px 0;
+}
+.hero {
+  text-align: center;
+  margin: 0 auto 28px;
+  max-width: 720px;
+}
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--color-kumo-hairline);
+  border-radius: 999px;
+  background: var(--color-kumo-base);
+  color: var(--text-color-kumo-subtle);
+  box-shadow: 0 1px 2px var(--color-kumo-shadow-drop);
+  padding: 4px 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+h1 {
+  margin: 14px 0 8px;
+  color: var(--text-color-kumo-strong);
+  font-size: clamp(36px, 5vw, 56px);
+  line-height: 1;
+  letter-spacing: -0.045em;
+}
+.hero p {
+  margin: 0;
+  color: var(--text-color-kumo-subtle);
+  font-size: 18px;
+}
+.shell {
+  overflow: hidden;
+  border: 1px solid var(--color-kumo-hairline);
+  border-radius: 18px;
+  background: var(--color-kumo-base);
+  box-shadow: 0 1px 0 var(--color-kumo-shadow-edge), 0 18px 40px var(--color-kumo-shadow-drop);
+}
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--color-kumo-hairline);
+  background: var(--color-kumo-elevated);
+}
+.agent-label {
+  color: var(--text-color-kumo-subtle);
+  font-size: 13px;
+  font-weight: 600;
+}
+.agent-name {
+  color: var(--text-color-kumo-strong);
+  font-size: 20px;
+  font-weight: 700;
+}
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--color-kumo-hairline);
+  border-radius: 999px;
+  background: var(--color-kumo-base);
+  color: var(--text-color-kumo-subtle);
+  padding: 4px 10px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.pill b { color: var(--text-color-kumo-strong); }
+#model { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+.messages {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 320px;
+  max-height: 54vh;
+  overflow-y: auto;
+  padding: 22px;
+  background: linear-gradient(180deg, var(--color-kumo-canvas), var(--color-kumo-base));
+}
+.bubble {
+  width: fit-content;
+  max-width: min(680px, 88%);
+  border-radius: 16px;
+  padding: 12px 15px;
+  box-shadow: 0 1px 2px var(--color-kumo-shadow-drop);
+  white-space: pre-wrap;
+}
+.assistant {
+  border: 1px solid var(--color-kumo-hairline);
+  background: var(--color-kumo-base);
+  color: var(--text-color-kumo-strong);
+}
+.user {
+  align-self: flex-end;
+  background: var(--color-kumo-brand);
+  color: var(--text-color-kumo-inverse);
+}
+form {
+  padding: 18px;
+  border-top: 1px solid var(--color-kumo-hairline);
+  background: var(--color-kumo-elevated);
+}
+label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text-color-kumo-strong);
+  font-size: 14px;
+  font-weight: 650;
+}
+textarea {
+  display: block;
+  width: 100%;
+  min-height: 112px;
+  resize: vertical;
+  border: 1px solid var(--color-kumo-line);
+  border-radius: 12px;
+  background: var(--color-kumo-control);
+  color: var(--text-color-kumo-default);
+  box-shadow: 0 1px 2px var(--color-kumo-shadow-drop);
+  padding: 12px 14px;
+  font: inherit;
+  outline: none;
+}
+textarea:focus { box-shadow: 0 0 0 2px var(--color-kumo-focus); }
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-top: 12px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--color-kumo-brand);
+  color: var(--text-color-kumo-inverse);
+  cursor: pointer;
+  padding: 12px 16px;
+  font: inherit;
+  font-weight: 700;
+  box-shadow: 0 1px 2px var(--color-kumo-shadow-drop);
+}
+button:hover { background: var(--color-kumo-brand-hover); }
+button:disabled { cursor: wait; opacity: 0.7; }
+@media (max-width: 700px) {
+  main { width: min(100vw - 20px, 920px); padding: 28px 0; }
+  .topbar { align-items: flex-start; flex-direction: column; }
+  .pills { justify-content: flex-start; }
+  .messages { min-height: 260px; padding: 16px; }
+  .bubble { max-width: 96%; }
+}
 </style>
 </head>
-<body class="min-h-screen bg-kumo-canvas text-kumo-default antialiased">
-<main class="mx-auto grid min-h-screen w-full max-w-4xl content-center gap-6 px-5 py-8">
-  <header class="mx-auto max-w-2xl text-center">
-    <div class="mb-4 inline-flex rounded-full border border-kumo-hairline bg-kumo-base px-3 py-1 text-sm font-medium text-kumo-subtle shadow-xs">Cloudflare Agents SDK + Pi</div>
-    <h1 class="text-4xl font-semibold tracking-tight text-kumo-strong md:text-5xl">Pi Agent on Cloudflare</h1>
-    <p class="mt-3 text-balance text-kumo-subtle">A Kumo-styled chat demo backed by one Durable Object. Each prompt runs through an Agents SDK fiber, Pi, and AI Gateway.</p>
+<body>
+<main>
+  <header class="hero">
+    <div class="eyebrow">Cloudflare Agents SDK + Pi</div>
+    <h1>Pi Agent on Cloudflare</h1>
+    <p>A Kumo-styled chat demo backed by one Durable Object. Each prompt runs through an Agents SDK fiber, Pi, and AI Gateway.</p>
   </header>
 
-  <section class="kumo-card overflow-hidden rounded-2xl border border-kumo-hairline bg-kumo-base">
-    <div class="flex flex-col gap-3 border-b border-kumo-hairline bg-kumo-elevated px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+  <section class="shell">
+    <div class="topbar">
       <div>
-        <div class="text-sm font-medium text-kumo-subtle">Durable Object</div>
-        <div class="text-lg font-semibold text-kumo-strong">PiAgent/default</div>
+        <div class="agent-label">Durable Object</div>
+        <div class="agent-name">PiAgent/default</div>
       </div>
-      <div class="flex flex-wrap gap-2 text-xs text-kumo-subtle">
-        <span class="rounded-full border border-kumo-hairline bg-kumo-base px-2.5 py-1">Requests <b id="requests" class="text-kumo-strong">-</b></span>
-        <span class="rounded-full border border-kumo-hairline bg-kumo-base px-2.5 py-1">Recoveries <b id="recoveries" class="text-kumo-strong">-</b></span>
-        <span id="model" class="rounded-full border border-kumo-hairline bg-kumo-base px-2.5 py-1 font-mono">Loading model...</span>
+      <div class="pills">
+        <span class="pill">Requests <b id="requests">-</b></span>
+        <span class="pill">Recoveries <b id="recoveries">-</b></span>
+        <span id="model" class="pill">Loading model...</span>
       </div>
     </div>
 
-    <div id="messages" class="flex min-h-72 flex-col gap-3 bg-kumo-canvas/60 p-5">
-      <div class="bubble rounded-2xl border border-kumo-hairline bg-kumo-base px-4 py-3 text-kumo-strong shadow-xs">Ready. Ask Pi something about running on Cloudflare.</div>
+    <div id="messages" class="messages">
+      <div class="bubble assistant">Ready. Ask Pi something about running on Cloudflare.</div>
     </div>
 
-    <form id="chat" class="space-y-3 border-t border-kumo-hairline bg-kumo-elevated p-5">
-      <label class="block space-y-2">
-        <span class="text-sm font-medium text-kumo-strong">Prompt</span>
-        <textarea id="prompt" class="min-h-28 w-full resize-y rounded-lg border border-kumo-line bg-kumo-control px-3 py-2 text-kumo-default shadow-xs outline-none ring-kumo-focus transition placeholder:text-kumo-placeholder focus:ring-2">Say hello from Pi running inside a Cloudflare Durable Object.</textarea>
-      </label>
-      <button id="run" class="inline-flex w-full items-center justify-center rounded-lg bg-kumo-brand px-4 py-2.5 font-medium text-kumo-inverse shadow-xs transition hover:bg-kumo-brand-hover disabled:cursor-wait disabled:opacity-70">Ask Pi</button>
+    <form id="chat">
+      <label for="prompt">Prompt</label>
+      <textarea id="prompt">Say hello from Pi running inside a Cloudflare Durable Object.</textarea>
+      <button id="run">Ask Pi</button>
     </form>
   </section>
 </main>
@@ -56,9 +221,7 @@ const run = document.getElementById("run");
 
 function bubble(text, who) {
   const el = document.createElement("div");
-  el.className = who === "user"
-    ? "bubble ml-auto rounded-2xl bg-kumo-brand px-4 py-3 text-kumo-inverse shadow-xs"
-    : "bubble rounded-2xl border border-kumo-hairline bg-kumo-base px-4 py-3 text-kumo-strong shadow-xs";
+  el.className = `bubble ${who}`;
   el.textContent = text;
   messages.append(el);
   el.scrollIntoView({ block: "nearest" });
