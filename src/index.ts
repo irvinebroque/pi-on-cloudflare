@@ -1,6 +1,8 @@
 import { Agent, getAgentByName, type FiberRecoveryContext } from "agents";
+import { DynamicWorkerExecutor } from "@cloudflare/codemode";
 import { Agent as Pi } from "@earendil-works/pi-agent-core";
-import { createAssistantMessageEventStream, type AssistantMessage, type Context, type Model } from "@earendil-works/pi-ai";
+import { createAssistantMessageEventStream, Type, type AssistantMessage, type Context, type Model, type Tool, type ToolCall } from "@earendil-works/pi-ai";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 
 type State = {
 	requests: number;
@@ -36,11 +38,39 @@ function modelFromGatewayName(name: string): Model<any> {
 function chatMessages(context: Context) {
 	return [
 		...(context.systemPrompt ? [{ role: "system", content: context.systemPrompt }] : []),
-		...context.messages.map((message) => ({
-			role: message.role === "assistant" ? "assistant" : "user",
-			content: text(message.content),
-		})),
+		...context.messages.map((message) => {
+			if (message.role === "toolResult") {
+				return { role: "tool", tool_call_id: message.toolCallId, content: text(message.content) };
+			}
+
+			return {
+				role: message.role === "assistant" ? "assistant" : "user",
+				content: text(message.content),
+				...(message.role === "assistant" && message.content.some((part) => part.type === "toolCall")
+					? {
+						tool_calls: message.content
+							.filter((part): part is ToolCall => part.type === "toolCall")
+							.map((part) => ({
+								id: part.id,
+								type: "function",
+								function: { name: part.name, arguments: JSON.stringify(part.arguments) },
+							})),
+					}
+					: {}),
+			};
+		}),
 	];
+}
+
+function toolsForGateway(tools: Tool[] | undefined) {
+	return tools?.map((tool) => ({
+		type: "function",
+		function: {
+			name: tool.name,
+			description: tool.description,
+			parameters: tool.parameters,
+		},
+	}));
 }
 
 function outputText(output: unknown): string {
@@ -63,13 +93,41 @@ function assistant(model: Model<any>, content: string, stopReason: AssistantMess
 	};
 }
 
+function toolCallAssistant(model: Model<any>, calls: Array<Record<string, any>>): AssistantMessage {
+	return {
+		...assistant(model, "", "toolUse"),
+		content: calls.map((call, index) => ({
+			type: "toolCall",
+			id: String(call.id ?? `call_${index}`),
+			name: String(call.function?.name ?? call.name ?? ""),
+			arguments: JSON.parse(String(call.function?.arguments ?? call.arguments ?? "{}")),
+		})),
+	};
+}
+
 function streamFromGateway(env: Env, model: Model<any>, context: Context) {
 	const stream = createAssistantMessageEventStream();
 
 	void (async () => {
 		try {
 			stream.push({ type: "start", partial: assistant(model, "") });
-			const output = await env.AI.run(model.name, { messages: chatMessages(context) }, { gateway: { id: env.AI_GATEWAY_ID, collectLog: true } });
+			const output = await env.AI.run(
+				model.name,
+				{
+					messages: chatMessages(context),
+					...(context.tools?.length ? { tools: toolsForGateway(context.tools) } : {}),
+				},
+				{ gateway: { id: env.AI_GATEWAY_ID, collectLog: true } },
+			);
+			const choice = Array.isArray((output as Record<string, unknown>)?.choices)
+				? ((output as { choices: Array<Record<string, any>> }).choices[0])
+				: undefined;
+			const toolCalls = choice?.message?.tool_calls;
+			if (Array.isArray(toolCalls) && toolCalls.length > 0) {
+				stream.push({ type: "done", reason: "toolUse", message: toolCallAssistant(model, toolCalls) });
+				return;
+			}
+
 			const answer = outputText(output);
 			const done = assistant(model, answer);
 
@@ -91,6 +149,32 @@ async function jsonBody(request: Request) {
 	return request.json().catch(() => ({})) as Promise<Record<string, unknown>>;
 }
 
+function codeTool(env: Env): AgentTool {
+	return {
+		name: "execute_js",
+		label: "Execute JavaScript",
+		description: "Run generated JavaScript in an isolated Dynamic Worker sandbox. Use this for calculations or small data transformations. The code must be an async arrow function and network access is blocked.",
+		parameters: Type.Object({
+			code: Type.String({ description: "An async arrow function, for example: async () => 2 + 2" }),
+		}),
+		execute: async (_toolCallId, params) => {
+			const { code } = params as { code: string };
+			const executor = new DynamicWorkerExecutor({ loader: env.LOADER, globalOutbound: null, timeout: 10_000 });
+			const result = await executor.execute(code, {});
+
+			return {
+				content: [
+					{
+						type: "text",
+						text: JSON.stringify({ result: result.result, error: result.error, logs: result.logs ?? [] }, null, 2),
+					},
+				],
+				details: result,
+			};
+		},
+	};
+}
+
 export class PiAgent extends Agent<Env, State> {
 	initialState: State = { requests: 0 };
 
@@ -109,7 +193,7 @@ export class PiAgent extends Agent<Env, State> {
 	private async completeTurn(prompt: string) {
 		const model = modelFromGatewayName(this.env.PI_MODEL);
 		const pi = new Pi({
-			initialState: { systemPrompt: SYSTEM_PROMPT, model, thinkingLevel: "off", tools: [] },
+			initialState: { systemPrompt: SYSTEM_PROMPT, model, thinkingLevel: "off", tools: [codeTool(this.env)] },
 			streamFn: (_model, context) => streamFromGateway(this.env, model, context),
 		});
 

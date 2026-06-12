@@ -16,6 +16,7 @@ In this setup:
 - `stash()` checkpoints the recovery input.
 - `onFiberRecovered()` defines what recovery means.
 - Pi runs the model-facing agent loop.
+- Pi can expose tools, including a Dynamic Worker code execution tool.
 - `env.AI.run()` calls the model through AI Gateway.
 
 ```text
@@ -24,6 +25,8 @@ Browser
   -> PiAgent Durable Object
   -> runFiber("pi-prompt")
   -> Pi core agent
+  -> execute_js tool when code is useful
+  -> Dynamic Worker sandbox
   -> env.AI.run(... AI Gateway ...)
 ```
 
@@ -46,6 +49,7 @@ npm install agents @earendil-works/pi-agent-core @earendil-works/pi-ai
   "durable_objects": {
     "bindings": [{ "name": "PiAgent", "class_name": "PiAgent" }]
   },
+  "worker_loaders": [{ "binding": "LOADER" }],
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["PiAgent"] }]
 }
 ```
@@ -138,6 +142,52 @@ export default {
 ```
 
 For a browser UI, serve static HTML with Workers Static Assets and route `/api/*` to the Worker first.
+
+## Add a Code Execution Tool
+
+Use a Worker Loader with Code Mode's `DynamicWorkerExecutor` to run generated JavaScript in an isolated Worker sandbox:
+
+```ts
+import { DynamicWorkerExecutor } from "@cloudflare/codemode";
+import { Type } from "@earendil-works/pi-ai";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
+
+function codeTool(env: Env): AgentTool {
+  return {
+    name: "execute_js",
+    label: "Execute JavaScript",
+    description: "Run generated JavaScript in an isolated Dynamic Worker sandbox. Network access is blocked.",
+    parameters: Type.Object({
+      code: Type.String({ description: "An async arrow function, for example: async () => 2 + 2" }),
+    }),
+    execute: async (_toolCallId, params) => {
+      const { code } = params as { code: string };
+      const executor = new DynamicWorkerExecutor({ loader: env.LOADER, globalOutbound: null });
+      const result = await executor.execute(code, {});
+
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        details: result,
+      };
+    },
+  };
+}
+```
+
+Then pass the tool to Pi:
+
+```ts
+const pi = new Pi({
+  initialState: {
+    systemPrompt,
+    model,
+    thinkingLevel: "off",
+    tools: [codeTool(this.env)],
+  },
+});
+```
+
+For more details, refer to [Codemode](https://developers.cloudflare.com/agents/model-context-protocol/protocol/codemode/) and [Dynamic Workers](https://developers.cloudflare.com/dynamic-workers/).
 
 ## Recovery Model
 

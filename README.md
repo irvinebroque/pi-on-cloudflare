@@ -16,6 +16,7 @@ Live demo: [pi-on-cloudflare.roundtrip.workers.dev](https://pi-on-cloudflare.rou
 - Pi's core agent loop running inside that Durable Object.
 - Model calls through the Cloudflare AI Gateway binding, with no provider API keys in Worker code.
 - Durable execution with `runFiber()`, `stash()`, and `onFiberRecovered()`.
+- Untrusted JavaScript execution in isolated Dynamic Workers via a Pi tool.
 
 ## Request Flow
 
@@ -25,6 +26,8 @@ Browser
   -> PiAgent Durable Object
   -> runFiber("pi-prompt")
   -> Pi core agent
+  -> execute_js tool when code is useful
+  -> Dynamic Worker sandbox
   -> env.AI.run(... AI Gateway ...)
 ```
 
@@ -66,6 +69,7 @@ The important bindings and settings live in `wrangler.jsonc`:
   "durable_objects": {
     "bindings": [{ "name": "PiAgent", "class_name": "PiAgent" }]
   },
+  "worker_loaders": [{ "binding": "LOADER" }],
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["PiAgent"] }]
 }
 ```
@@ -86,6 +90,10 @@ return await this.runFiber("pi-prompt", async (fiber) => {
 ```
 
 If the Durable Object is evicted while the turn is running, the original HTTP request cannot be resumed. The recovery hook defines the fallback behavior: replay the stashed prompt and persist recovery evidence in Agent state.
+
+## Code Execution
+
+The agent has one tool, `execute_js`, that runs generated JavaScript in an isolated Dynamic Worker. Network access is blocked for the sandbox; generated code can only return a result, errors, and captured logs.
 
 ## Draft Agents Docs
 
