@@ -9,23 +9,10 @@ Pi can be used as a custom harness on top of the Cloudflare Agents SDK runtime.
 
 Use this approach when you want Pi's agent loop and event model, but you want Cloudflare to provide the durable runtime: Durable Objects, Agent state, fibers, static assets, and AI Gateway.
 
-This page shows the smallest useful shape:
-
-- One `Agent` subclass.
-- One Durable Object instance.
-- One static chat UI.
-- One prompt endpoint.
-- One Pi turn inside an Agents SDK fiber.
-- One AI Gateway model call.
-
-## How It Fits
-
-Harnesses sit above the Agents SDK runtime. The runtime answers where the agent lives and how it stays durable. The harness answers what happens during an agent turn.
-
 In this setup:
 
 - The Agents SDK `Agent` class gives you a Durable Object with persisted state.
-- `runFiber()` gives you durable execution for a prompt turn.
+- `runFiber()` gives you durable execution for a turn.
 - `stash()` checkpoints the recovery input.
 - `onFiberRecovered()` defines what recovery means.
 - Pi runs the model-facing agent loop.
@@ -66,8 +53,6 @@ npm install agents @earendil-works/pi-agent-core @earendil-works/pi-ai
 Run `wrangler types` after changing bindings.
 
 ## Create an Agent
-
-The Agent stores small durable metadata in Agent state. The prompt itself runs inside a fiber.
 
 ```ts
 import { Agent, getAgentByName, type FiberRecoveryContext } from "agents";
@@ -114,8 +99,6 @@ export class PiAgent extends Agent<Env, State> {
 }
 ```
 
-The full working example is intentionally a little longer because it adapts Pi's event stream to `env.AI.run()`.
-
 ## Call AI Gateway From Pi
 
 Pi expects a stream function. In a Worker, that function can call the AI binding:
@@ -158,38 +141,87 @@ For a browser UI, serve static HTML with Workers Static Assets and route `/api/*
 
 ## Recovery Model
 
-Fibers make the work recoverable, but they do not keep the original HTTP client alive forever.
+Wrap the Pi turn in `runFiber()` and checkpoint the prompt with `stash()` before calling Pi:
 
-If the Durable Object is evicted during an inline `runFiber()` call:
+```ts
+async runPrompt(input: string) {
+  const prompt = input.trim();
+  if (!prompt) throw new Error("Missing prompt");
 
-1. The original HTTP request is gone.
-2. The fiber record and snapshot remain in the Agent's SQLite storage.
-3. On the next activation, `onFiberRecovered()` receives the stashed prompt.
-4. The Agent can replay the prompt and persist the recovered result in state.
+  return await this.runFiber("pi-prompt", async (fiber) => {
+    fiber.stash({ prompt });
+    const result = await this.askPi(prompt);
+    this.setState({ requests: this.state.requests + 1 });
+    return result;
+  });
+}
+```
 
-Use `runFiber()` when you want the simplest request/response API and a recovery policy. Use `startFiber()` when callers need durable acceptance, idempotency, cancellation, and later status inspection.
+If the Durable Object is evicted during that turn, the original HTTP request cannot be resumed. The recovery hook receives the stashed prompt and can replay the turn in the background:
+
+```ts
+async onFiberRecovered(ctx: FiberRecoveryContext) {
+  if (ctx.name !== "pi-prompt") return;
+
+  const snapshot = ctx.snapshot as { prompt?: unknown } | null;
+  if (typeof snapshot?.prompt !== "string") return;
+
+  const { answer } = await this.askPi(snapshot.prompt);
+  this.setState({
+    requests: this.state.requests + 1,
+    recoveries: (this.state.recoveries ?? 0) + 1,
+    lastRecoveredAnswer: answer,
+  });
+}
+```
+
+For the full API, refer to [Durable execution with fibers](https://developers.cloudflare.com/agents/runtime/execution/durable-execution/).
+
+Use `startFiber()` instead of `runFiber()` when callers need durable acceptance, idempotency, cancellation, and later status inspection.
 
 ## Persistence
 
-Use the Agents SDK persistence that is already built into the runtime:
+Use the Agents SDK persistence that is already built into each Agent instance.
 
-- `this.state` and `this.setState()` for small JSON state.
-- `fiber.stash()` for recovery checkpoints.
-- `this.sql` only when you need queryable history or larger collections.
+Use Agent state for small, durable metadata:
+
+```ts
+type State = {
+  requests: number;
+  recoveries?: number;
+  lastRecoveredAnswer?: string;
+};
+
+export class PiAgent extends Agent<Env, State> {
+  initialState: State = { requests: 0 };
+
+  status() {
+    return {
+      model: this.env.PI_MODEL,
+      gateway: this.env.AI_GATEWAY_ID,
+      requests: this.state.requests,
+      recoveries: this.state.recoveries ?? 0,
+      lastRecoveredAnswer: this.state.lastRecoveredAnswer,
+    };
+  }
+}
+```
+
+Use `setState()` after a successful turn or recovery:
+
+```ts
+this.setState({ requests: this.state.requests + 1 });
+```
+
+Use `stash()` for the fiber checkpoint, not for normal UI state:
+
+```ts
+fiber.stash({ prompt });
+```
+
+Use `this.sql` only when you need queryable history or larger collections.
 
 Do not add KV, D1, R2, or custom persistence for the minimal Pi harness unless your application needs files, cross-agent queries, or large message history.
-
-## When To Use This
-
-Use this Pi harness approach when you want:
-
-- Pi's core agent loop.
-- Cloudflare Durable Object identity and state.
-- AI Gateway model access.
-- Agent fiber recovery.
-- A small custom UI or API.
-
-Use a more complete framework, such as Think, when you want built-in chat protocol support, persistent conversation sessions, context management, tool orchestration, and a client SDK integration out of the box.
 
 ## Example Repository
 

@@ -72,20 +72,9 @@ The important bindings and settings live in `wrangler.jsonc`:
 
 The `AI` binding calls models through AI Gateway. Third-party models use Cloudflare's AI Gateway / unified billing path, so this example does not read `OPENAI_API_KEY` or other provider secrets from the Worker.
 
-## Why Pi Core Instead of the Full Pi Coding Agent Package?
-
-The full Pi coding-agent package is built for a Node.js CLI environment. It can pull in filesystem, process, and child-process assumptions that are not appropriate for a minimal Worker.
-
-This example uses:
-
-- `@earendil-works/pi-agent-core`
-- `@earendil-works/pi-ai`
-
-That keeps the Worker focused on the agent loop and model call.
-
 ## Durable Execution
 
-Each prompt runs inside an Agents SDK fiber:
+Each turn runs inside an Agents SDK fiber:
 
 ```ts
 return await this.runFiber("pi-prompt", async (fiber) => {
@@ -96,7 +85,7 @@ return await this.runFiber("pi-prompt", async (fiber) => {
 });
 ```
 
-If the Durable Object is evicted while the prompt is running, the original HTTP request cannot be resumed. The recovery hook defines the fallback behavior: replay the stashed prompt and persist recovery evidence in Agent state.
+If the Durable Object is evicted while the turn is running, the original HTTP request cannot be resumed. The recovery hook defines the fallback behavior: replay the stashed prompt and persist recovery evidence in Agent state.
 
 ## Draft Agents Docs
 
